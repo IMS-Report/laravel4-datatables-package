@@ -31,7 +31,6 @@ class Datatables
 	public 		$last_columns 		= array();
 
 	protected	$count_all		= 0;
-	protected	$count_total	= 0;
 
 	protected	$result_object;
 	protected	$result_array		= array();
@@ -386,35 +385,37 @@ class Datatables
 							$keyword = $copy_this->wildcard_like_string(Input::get('sSearch'));
 						}
 						
-						// Check the current $column type
-						// If it isn't a string/text/blob, cast it to a string of 255 characters
-						$cast_begin = null;
-						$cast_end = null;
-						$column_max_length = 255;
+						// Check the current $column type and if it's a VARCHAR, set its max size instead of 255
+						$column_max_size = 255;
 						preg_match('#([^.]+)\.(.+)$#si', $column, $table_infos);
 						if(empty($table_infos)) {
-							throw new \Exception("Invalid table and column names format for '".$column."'");
+							throw new \Exception("Invalid table and column names format '".$column."'");
 						} else {
 							if(empty($table_infos[1])){
-								throw new \Exception("Empty table for '".$column."'");
+								throw new \Exception("Empty table");
 							} elseif (empty($table_infos[2])) {
-								throw new \Exception("Empty column for '".$column."'");
+								throw new \Exception("Empty column");
 							}
 							$table = $table_infos[1];
 							$target_column = $table_infos[2];
-							$doctrine_column = DB::getDoctrineColumn($db_prefix . $table, $target_column);
-							$type = $doctrine_column->getType()->getName();
-							if( !in_array($type, array('string', 'text', 'blob')) ) {
-								$cast_begin = "CAST(";
-								$cast_end = " as CHAR(".$column_max_length."))";
+							$schema = \DB::getDoctrineSchemaManager($table);
+							$columns = $schema->listTableColumns($table);
+							foreach ($columns as $column_infos) {
+								if($column_infos->getName() === $target_column) {
+									$length = $column_infos->getLength();									
+									if(!empty($length) && $length < $column_max_size) {
+										$column_max_size = $length;
+									}
+									break;
+								}
 							}
 						}
-						
-						$column = $db_prefix . $column;
+
 						if(Config::get('datatables.search.case_insensitive', false)) {
-							$query->orwhere(DB::raw('LOWER('.$cast_begin.$column.$cast_end.')'), 'LIKE', $keyword);
+							$column = $db_prefix . $column;
+							$query->orwhere(DB::raw('LOWER(CAST('.$column.' as CHAR('.$column_max_size.')))'), 'LIKE', $keyword);
 						} else {
-							$query->orwhere(DB::raw($cast_begin.$column.$cast_end), 'LIKE', $keyword);
+							$query->orwhere(DB::raw('CAST('.$column.' as CHAR('.$column_max_size.'))'), 'LIKE', $keyword);
 						}
 					}
 				}
@@ -488,9 +489,6 @@ class Datatables
 		$columns = $query_type == 'eloquent' ? $this->query->getQuery()->columns : $this->query->columns;
 		
 		$this->count_all = $this->query->count();
-
-		$model = str_singular(studly_case($this->query->getQuery()->from));
-		$this->count_total = $model::count();
 		
 		//Put columns back.
 		$this->query->select($columns);
@@ -532,7 +530,7 @@ class Datatables
 	{
 		$output = array(
 			"sEcho" => intval(Input::get('sEcho')),
-			"iTotalRecords" => $this->count_total,
+			"iTotalRecords" => $this->count_all,
 			"iTotalDisplayRecords" => $this->count_all,
 			"aaData" => $this->result_array_r
 		);
