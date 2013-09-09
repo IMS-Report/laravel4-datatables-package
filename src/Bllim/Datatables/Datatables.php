@@ -361,8 +361,8 @@ class Datatables
 
 	private function filtering()
 	{
-		
-		
+
+
 		if (Input::get('sSearch','') != '')
 		{
 			$copy_this = $this;
@@ -370,10 +370,10 @@ class Datatables
 			$this->query->where(function($query) use ($copy_this) {
 
 				$db_prefix = $copy_this->database_prefix();
-				
-				
 
-				for ($i=0,$c=count($copy_this->columns);$i<$c;$i++)
+
+
+				for ($i=0,$c=count($copy_this->last_columns);$i<$c;$i++)
 				{
 					if (Input::get('bSearchable_'.$i) == "true")
 					{
@@ -385,7 +385,7 @@ class Datatables
 						if(Config::get('datatables.search.use_wildcards', false)) {
 							$keyword = $copy_this->wildcard_like_string(Input::get('sSearch'));
 						}
-						
+
 						// Check the current $column type
 						// If it isn't a string/text/blob, cast it to a string of 255 characters
 						$cast_begin = null;
@@ -409,7 +409,7 @@ class Datatables
 								$cast_end = " as CHAR(".$column_max_length."))";
 							}
 						}
-						
+
 						$column = $db_prefix . $column;
 						if(Config::get('datatables.search.case_insensitive', false)) {
 							$query->orwhere(DB::raw('LOWER('.$cast_begin.$column.$cast_end.')'), 'LIKE', $keyword);
@@ -421,7 +421,7 @@ class Datatables
 			});
 
 		}
-    
+
 		$db_prefix = $this->database_prefix();
 
 		for ($i=0,$c=count($this->columns);$i<$c;$i++)
@@ -486,12 +486,12 @@ class Datatables
 		//Get columns to temp var.
         $query_type = get_class($this->query) == 'Illuminate\Database\Query\Builder' ? 'fluent' : 'eloquent';
 		$columns = $query_type == 'eloquent' ? $this->query->getQuery()->columns : $this->query->columns;
-		
+
 		$this->count_all = $this->query->count();
 
 		$model = str_singular(studly_case($this->query->getQuery()->from));
 		$this->count_total = $model::count();
-		
+
 		//Put columns back.
 		$this->query->select($columns);
 	}
